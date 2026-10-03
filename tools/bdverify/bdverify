@@ -1,0 +1,3 @@
+#!/usr/bin/env bash
+# bdverify 启动器 —— 放进 PATH 后可直接 `bdverify ls` 等。
+exec python3 "$(dirname "$(readlink -f "$0" 2>/dev/null || echo "$0")")/bdverify.py" "$@"

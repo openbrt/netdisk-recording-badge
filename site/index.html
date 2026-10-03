@@ -1,0 +1,21 @@
+<!doctype html>
+<html lang="zh-CN"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="description" content="网盘录音工牌：在线烧写、USB Wi-Fi 配置与上手指南。持续录音，自动分段上传百度网盘。">
+<title>网盘录音工牌 · 在线烧写与配网</title><link rel="stylesheet" href="style.css">
+<script type="module" src="https://unpkg.com/esp-web-tools@10.1.0/dist/web/install-button.js?module"></script>
+<script type="module" src="app.mjs"></script></head>
+<body><nav><a class="brand" href="#">网盘录音工牌</a><a href="https://github.com/openbrt/netdisk-recording-badge">开源项目 ↗</a></nav>
+<main><header class="hero"><div><span class="eyebrow">NETDISK RECORDING BADGE · v0.4.4</span><h1>随身记下声音，<br>让灵感有迹可循。</h1><p class="lead">持续录音，自动分段上传百度网盘。用库库 AI 转写、摘要，把随口说出的想法留给下一次创作。</p><div class="links"><a class="primary" href="#install">在线烧写</a><a class="secondary" href="#wifi-config">配置 Wi-Fi</a></div><p class="caption">为 FoloToy AI Passport 工牌制作的独立应用</p></div><figure><img src="assets/cover.png" alt="网盘录音工牌的彩色宣传插画" width="1086" height="1448"><figcaption>AI 生成示意图</figcaption></figure></header>
+<div class="steps"><span>01 连接 USB</span><span>02 安装固件</span><span>03 配网并扫码授权</span><span>04 开始录音</span></div>
+<section id="install"><span class="eyebrow">INSTALL</span><h2>装上录音工牌</h2><p>在电脑 Chrome 或 Edge 中打开此页，用 USB 数据线连接工牌。关闭串口监视器等占用设备的程序。</p>
+<label for="mode">安装方式</label><select id="mode"><option value="full">首次安装 · 完整固件</option><option value="update">本项目 0.4.x · 仅更新应用</option></select>
+<p id="impact" class="notice">首次安装会替换原固件，合并镜像会覆盖 NVS 配网和网盘授权。需要保留配置时，请确认兼容性并选择仅更新应用。</p>
+<esp-web-install-button id="installer" manifest="manifest.json"><button slot="activate" class="primary">选择设备并烧写 0.4.4</button><span slot="unsupported">请使用支持 Web Serial 的电脑浏览器。</span><span slot="not-allowed">需要通过 HTTPS 或 localhost 打开此页。</span></esp-web-install-button>
+<p class="caption">安装完成后关闭烧写对话框，等待工牌重启，再进行下方配网。若连接失败，检查数据线并关闭其他串口程序后重试。</p>
+<details><summary>固件下载与版本校验</summary><p>发布固件包含作者的百度应用配置；源码不包含真实应用 Secret。用户仍需扫码授权自己的百度网盘。自行编译时可使用自己的应用凭据。</p><a href="https://github.com/openbrt/netdisk-recording-badge/releases/tag/v0.4.4-netdisk-recording-badge">查看固件与 SHA-256 ↗</a></details></section>
+<section id="wifi-config"><span class="eyebrow">CONNECT</span><h2>通过 USB 配置 Wi-Fi</h2><p>连接工牌后，输入可用的 <strong>2.4 GHz、有密码的 Wi-Fi</strong>。密码仅经 USB 发送到工牌；此页面不上传密码，也不保存密码。配网前先停止录音或回放。</p>
+<div class="links"><button id="connect" class="secondary">连接 USB 工牌</button><button id="disconnect" class="plain" disabled>断开 USB</button></div>
+<form id="wifi"><label for="ssid">Wi-Fi 名称（SSID）</label><input id="ssid" autocomplete="off" required placeholder="输入网络名称，区分大小写"><label for="password">Wi-Fi 密码</label><input id="password" type="password" autocomplete="off" required placeholder="输入 Wi-Fi 密码"><div class="links"><button id="save" class="primary" disabled>保存并连接</button><button id="refresh" type="button" class="plain" disabled>刷新连接状态</button></div></form>
+<p id="status" role="status" aria-live="polite">请先连接 USB 工牌。</p><p class="caption">显示“已连接”与 IP 地址才表示成功。失败时检查密码、距离和频段后重试；换网时重新填写并保存。也可在工牌“无线网络”菜单扫描并配网。</p></section>
+<section><span class="eyebrow">GET STARTED</span><h2>开始记录</h2><ol><li>配网成功后，短按 OK 打开菜单，进入“网盘文件”，用手机扫描工牌二维码并授权百度网盘。</li><li>主页长按 OK，或同时按下键与 OK，开始录音；录音中长按 OK 停止。每分钟自动保存并后台上传，停止后保存最后一段。</li><li>在百度网盘的应用录音日期目录中找到文件，再使用库库 AI 转写或摘要。断网时保存并停止，网络恢复后补传；要继续录音需再次按键。</li><li>子页面长按 OK 返回；主页长按下键熄屏，任意键唤醒。</li></ol><div class="links"><a href="https://github.com/openbrt/netdisk-recording-badge/blob/main/docs/kuku-badge-user-guide.zh_CN.md">完整操作指南 ↗</a><a href="https://github.com/openbrt/netdisk-recording-badge/blob/main/docs/build.zh_CN.md">自行编译 ↗</a></div></section>
+</main><footer>网盘录音工牌 · openbrt · 基于 FoloToy AI Passport · <a href="https://github.com/openbrt/netdisk-recording-badge/blob/main/LICENSE">MIT 开源</a></footer></body></html>

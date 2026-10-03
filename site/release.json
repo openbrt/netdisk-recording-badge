@@ -1,0 +1,18 @@
+{
+  "version": "0.4.4",
+  "tag": "v0.4.4-netdisk-recording-badge",
+  "files": [
+    {
+      "name": "FoloToy-AI-Passport-full.bin",
+      "sha256": "f074dacf0e87bf9680698a597ff42fd1cf59695da06c63fba77d9b11e8814b6c",
+      "bytes": 2022912,
+      "offset": 0
+    },
+    {
+      "name": "FoloToy-AI-Passport.bin",
+      "sha256": "a2ebafc68a96f84c63f29d42374afad79add76c11696097c7cac18d2bdefa394",
+      "bytes": 1957376,
+      "offset": 65536
+    }
+  ]
+}
