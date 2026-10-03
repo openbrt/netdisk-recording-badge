@@ -59,6 +59,18 @@ The successful merged image is `build/FoloToy-AI-Passport-full.bin`, for flashin
 python3 tools/archive_firmware.py verify build/firmware/<full-image-SHA-256>
 ```
 
+In a native Windows ESP-IDF terminal, build and verify the images directly:
+
+```text
+idf.py set-target esp32c3
+idf.py build
+idf.py merge-bin -o build/FoloToy-AI-Passport-full.bin
+python tools/verify_firmware.py build
+python tools/archive_firmware.py create build
+```
+
+These commands do not run host tests. The complete Bash gate also needs Bash, a host C compiler, Python, and Node.js; run it on macOS/Linux or a configured WSL environment. Native Windows compilation does not require WSL just to use the firmware.
+
 Keep `build/` out of Git. Rebuilding with your own credentials changes firmware hashes; the owner's binary acceptance results do not apply to your new build. Compilation does not establish physical behavior.
 
 ## 4. Incremental development and flashing

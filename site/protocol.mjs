@@ -1,9 +1,10 @@
 export function wifiCommand(ssid, password) {
   const size = new TextEncoder().encode(ssid).length;
-  if (!size || size > 32 || (/[|\r\n\0]/u.test(ssid) || ssid.startsWith(' ')))
-    throw new Error('网络名称须为 1～32 字节，且不能包含竖线或换行。');
-  if (/[\r\n\0]/u.test(password) || !(
-    (password.length >= 8 && new TextEncoder().encode(password).length <= 63) ||
+  if (!size || size > 32 || (/[|\x00-\x1f\x7f]/u.test(ssid) || ssid.startsWith(' ')))
+    throw new Error('网络名称须为 1～32 字节，不能以空格开头或包含竖线、控制字符。');
+  const passwordBytes = new TextEncoder().encode(password).length;
+  if (/[\x00-\x1f\x7f]/u.test(password) || !(
+    (passwordBytes >= 8 && passwordBytes <= 63) ||
     /^[0-9a-f]{64}$/iu.test(password)))
     throw new Error('请输入 8～63 字节的 Wi-Fi 密码，或 64 位十六进制密钥；此入口不支持无密码网络。');
   return `WIFI SET ${ssid}|${password}`;

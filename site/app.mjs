@@ -24,7 +24,7 @@ $('mode').addEventListener('change', () => {
   $('installer').setAttribute('manifest', $('mode').value === 'update' ? 'manifest-update.json' : 'manifest.json');
   $('impact').textContent = $('mode').value === 'update'
     ? '仅适用于本项目 0.4.x、应用位于 0x10000 的兼容分区。安装时不要勾选擦除；应用更新不写入 NVS。其他固件请用首次安装。'
-    : '首次安装会替换原固件，合并镜像会覆盖 NVS 配网和网盘授权。需要保留配置时，请确认兼容性并选择仅更新应用。';
+    : '首次安装会替换原固件，合并镜像会覆盖 NVS 配网和网盘授权。需要保留配置时，请确认兼容性并选择仅更新应用。勾选擦除会清空本地录音、照片和配置。';
 });
 $('connect').addEventListener('click', () => run(async () => {
   if (!navigator.serial) throw new Error('此浏览器不支持 USB 串口，请在电脑 Chrome 或 Edge 中打开。');

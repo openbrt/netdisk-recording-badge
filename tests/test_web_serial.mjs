@@ -36,6 +36,9 @@ test('credentials preserve case, spaces and password pipes; reject command injec
   for (const pass of ['', 'short', 'X\n12345678', '界'.repeat(22), 'g'.repeat(64)])
     assert.throws(() => wifiCommand('Network', pass));
   assert.doesNotThrow(() => wifiCommand('Network', 'a'.repeat(64)));
+  assert.doesNotThrow(() => wifiCommand('Network', '界'.repeat(3)));
+  assert.throws(() => wifiCommand('Net\twork', '12345678'));
+  assert.throws(() => wifiCommand('Network', '12345678\x1b'));
 });
 test('decoder handles fragmented multibyte SSIDs and suppresses auth logs', () => {
   const decoder = new LineDecoder();

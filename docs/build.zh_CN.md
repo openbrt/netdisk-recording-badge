@@ -59,6 +59,18 @@ node --test tests/test_web_serial.mjs
 python3 tools/archive_firmware.py verify build/firmware/<完整镜像-SHA-256>
 ```
 
+原生 Windows ESP-IDF 终端可直接编译并验证镜像：
+
+```text
+idf.py set-target esp32c3
+idf.py build
+idf.py merge-bin -o build/FoloToy-AI-Passport-full.bin
+python tools/verify_firmware.py build
+python tools/archive_firmware.py create build
+```
+
+这些命令不运行主机测试。完整 Bash gate 还需要 Bash、主机 C 编译器、Python 和 Node.js，可在 macOS/Linux 或配置好的 WSL 环境运行；Windows 原生编译不需要为了使用固件而安装 WSL。
+
 `build/` 不提交到 Git。使用自己的凭据重新编译后，固件校验值会与作者发布版本不同；不能沿用作者二进制的验收结论。编译通过不代表实机功能通过。
 
 ## 4. 增量开发与烧写
