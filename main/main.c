@@ -20,6 +20,7 @@
 #include "bsp_button.h"
 #include "bsp_audio.h"
 #include "bsp_battery.h"
+#include "kuku_endurance.h"
 #include "bsp_pins.h"
 #include "esp_log.h"
 #include "esp_system.h"
@@ -536,7 +537,7 @@ void app_main(void) {
 
     s_input_queue = xQueueCreate(8, sizeof(input_event_t));
     if (s_input_queue &&
-        xTaskCreate(input_task, "kuku_input", 9216, NULL, 5, NULL) == pdPASS &&
+        xTaskCreate(input_task, "kuku_input", 6144, NULL, 5, NULL) == pdPASS &&
         bsp_button_init(on_key, NULL) == ESP_OK) {
         s_input_ready = true;
     } else {
@@ -566,4 +567,5 @@ void app_main(void) {
 
     ESP_LOGI(TAG, "就绪: 下+确认任意页请求云端检查后录音, 菜单可回放/Wi-Fi/网盘");
     kuku_test_start();
+    kuku_endurance_start();
 }

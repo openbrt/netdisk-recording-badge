@@ -945,21 +945,23 @@ void kuku_ui_reset_feedback(int result) {
 
 // ---- 操作指南 --------------------------------------------------------------
 static const char *const GUIDE_PAGES[] = {
-    "任意键唤醒，短按OK菜单\n长按OK：开始或停止录音\n自动分段，不需再次按键\n录音时后台上传已存文件\n断网 / 暂存满时保存停止",
+    "任意键唤醒，短按OK菜单\n长按OK：开始或停止录音\n每分钟分段，持续录音\n每段上传后清理暂存\n断网 / 暂存满时保存停止",
     "录音按日期上传网盘\n目录：OK进入，长按返回\n返回再进可刷新目录\n图片：OK设为工牌照片\n网盘库库AI：转写或摘要",
     "菜单 > 无线网络 > OK\nOK：扫描附近网络\n空密码选<返回列表\n已存网络自动回连\n下键查看已存网络",
-    "菜单 > 重置网盘连接\n上下选择，OK确认重置\n录音或传输时不可重置\n保留Wi-Fi、照片和录音\n重置后OK重新扫码授权"
+    "菜单 > 重置网盘连接\n上下选择，OK确认重置\n录音或传输时不可重置\n保留Wi-Fi、照片和录音\n重置后OK重新扫码授权",
+    "电脑开启续航测试后\n拔下USB，后台收集数据\n录音仍用原来的按键\n测试不改变屏幕亮度\n后台结果为续航估算"
 };
 static const char *const GUIDE_SECTIONS[] = {
-    "录音", "网盘文件", "无线网络", "重置连接"
+    "录音", "网盘文件", "无线网络", "重置连接", "续航测试"
 };
 static const char *const GUIDE_NAV[] = {
     "下键下一页 / 长按OK返回",
     "上下键翻页 / 长按OK返回",
     "上下键翻页 / 长按OK返回",
+    "上下键翻页 / 长按OK返回",
     "上键上一页 / 长按OK返回"
 };
-#define GUIDE_N 4
+#define GUIDE_N 5
 
 static void guide_refresh(void) {
     if (s_guide_text) lv_label_set_text(s_guide_text, GUIDE_PAGES[s_guide_page]);

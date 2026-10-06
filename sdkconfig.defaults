@@ -39,6 +39,7 @@ CONFIG_LV_USE_BMP=y
 # --- 系统 ---
 CONFIG_ESP_MAIN_TASK_STACK_SIZE=9216
 CONFIG_FREERTOS_HZ=1000
+CONFIG_FREERTOS_USE_TRACE_FACILITY=y
 
 # --- Bluetooth LE / NimBLE ---
 # Netdisk Recording Badge v0.1 不使用 BLE(省 ~50KB 堆 + ~300KB flash);基线 demo 需要时

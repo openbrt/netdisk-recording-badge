@@ -1,5 +1,9 @@
 **English** · [简体中文](/docs/README.zh_CN.md)
 
+## Netdisk Recording Badge
+
+See the [product README](../README.md), [recording endurance](recording-endurance.md), [user guide](kuku-badge-user-guide.md), and [session handoff](session-handoff.md) for the standalone recording application. The hardware and baseline references below remain available.
+
 <h1 align="center">FoloToy AI PASSPORT</h1>
 
 <p align="center">

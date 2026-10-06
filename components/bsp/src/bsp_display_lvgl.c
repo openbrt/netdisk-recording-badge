@@ -9,7 +9,8 @@
 
 static const char *TAG = "bsp_lvgl";
 
-#define BSP_LVGL_DRAW_BUFFER_LINES 40
+// Partial refreshes need only a strip, leaving 13,440 bytes for audio + TLS.
+#define BSP_LVGL_DRAW_BUFFER_LINES 12
 
 static lv_display_t *s_disp;
 static bool s_port_initialized;

@@ -1,6 +1,9 @@
 // components/bsp/src/bsp_display.c
 // 移植自 trae_card/components/platform/platform_esp32/src/disp_st7789.c
 #include "bsp_display.h"
+#include <stdatomic.h>
+
+static atomic_uchar s_backlight_level;
 #include "bsp_pins.h"
 #include "driver/gpio.h"
 #include "driver/spi_master.h"
@@ -238,7 +241,10 @@ void bsp_display_backlight(uint8_t percent) {
     uint32_t duty = (max_duty * percent) / 100u;
     ledc_set_duty(BSP_BL_LEDC_MODE, BSP_BL_LEDC_CHANNEL, duty);
     ledc_update_duty(BSP_BL_LEDC_MODE, BSP_BL_LEDC_CHANNEL);
+    atomic_store(&s_backlight_level, percent);
 }
+
+uint8_t bsp_display_backlight_level(void) { return atomic_load(&s_backlight_level); }
 
 esp_err_t bsp_display_prepare_deep_sleep(void) {
     esp_err_t first_error = ESP_OK;

@@ -12,6 +12,7 @@ class ContinuousTest(unittest.TestCase):
         source=(ROOT/'main/kuku_rec.c').read_text()
         writer=source[source.index('static bool rec_segment_open('):source.index('\nint kuku_rec_start(')]
         harness=r'''
+#include "kuku_rec_progress.h"
 #include <assert.h>
 #include <stdbool.h>
 #include <stdint.h>
@@ -25,7 +26,7 @@ class ContinuousTest(unittest.TestCase):
 #include "kuku_cloud_path.h"
 #define REC_MOUNT_POINT "rec"
 #define KUKU_MAX_NAME 32
-#define KUKU_REC_CHUNK_BYTES 4096
+#define KUKU_REC_CHUNK_BYTES 1024
 #define KUKU_SAMPLE_RATE_HZ 16000
 #define KUKU_REC_SEGMENT_SECONDS 60
 #define CAPTURE_TASK_STACK 3072
@@ -131,7 +132,7 @@ int main(void) {
 '''
         with tempfile.TemporaryDirectory() as tmp:
             p=Path(tmp);(p/'test.c').write_text(harness+writer+checks)
-            subprocess.run(['cc','-std=c11','-Wall','-Wextra','-Werror','-I'+str(ROOT/'main'),str(p/'test.c'),str(ROOT/'main/kuku_wav.c'),str(ROOT/'main/kuku_rec_filename.c'),str(ROOT/'main/kuku_cloud_path.c'),'-o',str(p/'test')],check=True)
+            subprocess.run(['cc','-std=c11','-Wall','-Wextra','-Werror','-I'+str(ROOT/'main'),str(p/'test.c'),str(ROOT/'main/kuku_rec_progress.c'),str(ROOT/'main/kuku_wav.c'),str(ROOT/'main/kuku_rec_filename.c'),str(ROOT/'main/kuku_cloud_path.c'),'-o',str(p/'test')],check=True)
             subprocess.run([str(p/'test')],cwd=p,check=True)
 
 

@@ -26,3 +26,6 @@ bd_pull/
 _site/
 site/firmware/
 site/assets/
+
+# Machine-local handoff, publication evidence, and private workspace notes.
+.local/

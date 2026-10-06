@@ -35,6 +35,15 @@ run_static_checks() {
         -o "${test_dir}/test_kuku_wav"
     "${test_dir}/test_kuku_wav"
     "${CC:-cc}" -std=c11 -Wall -Wextra -Werror -Imain \
+        tests/test_kuku_console_line.c main/kuku_console_line.c \
+        -o "${test_dir}/test_kuku_console_line"
+    "${test_dir}/test_kuku_console_line"
+    "${CC:-cc}" -std=c11 -Wall -Wextra -Werror -Imain \
+        tests/test_kuku_endurance.c main/kuku_endurance_core.c main/kuku_rec_progress.c \
+        -o "${test_dir}/test_kuku_endurance"
+    "${test_dir}/test_kuku_endurance"
+    PYTHONDONTWRITEBYTECODE=1 python3 tests/test_endurance_collector.py
+    "${CC:-cc}" -std=c11 -Wall -Wextra -Werror -Imain \
         tests/test_kuku_rec_filename.c main/kuku_rec_filename.c \
         -o "${test_dir}/test_kuku_rec_filename"
     "${test_dir}/test_kuku_rec_filename"
@@ -96,6 +105,7 @@ run_static_checks() {
     PYTHONDONTWRITEBYTECODE=1 python3 tests/test_kuku_baidu_http.py
     PYTHONDONTWRITEBYTECODE=1 python3 tests/test_kuku_baidu_auth_refresh.py
     PYTHONDONTWRITEBYTECODE=1 python3 tests/test_kuku_baidu_stack.py
+    PYTHONDONTWRITEBYTECODE=1 python3 tests/test_kuku_upload_scratch.py
     PYTHONDONTWRITEBYTECODE=1 python3 tests/test_kuku_baidu_part_response.py
     PYTHONDONTWRITEBYTECODE=1 python3 tests/test_kuku_baidu_reset.py
     PYTHONDONTWRITEBYTECODE=1 python3 tools/bdverify/test_bdverify.py
@@ -106,6 +116,10 @@ run_static_checks() {
 
 run_firmware_checks() (
     local validation_build_dir
+    local private_build_args=()
+    if [[ -n "${KUKU_BAIDU_KEYS_HEADER:-}" ]]; then
+        private_build_args=(-D "KUKU_BAIDU_KEYS_HEADER=${KUKU_BAIDU_KEYS_HEADER}")
+    fi
 
     if ! command -v idf.py >/dev/null 2>&1; then
         echo "ERROR: idf.py is not available; activate ESP-IDF 5.5.3 first." >&2
@@ -117,6 +131,7 @@ run_firmware_checks() (
 
     SDKCONFIG_DEFAULTS="${repo_root}/sdkconfig.defaults" \
         idf.py -B "${validation_build_dir}" \
+        "${private_build_args[@]}" \
         -D "SDKCONFIG=${validation_build_dir}/sdkconfig" build
     PYTHONDONTWRITEBYTECODE=1 python3 tests/test_kuku_image.py
     idf.py -B "${validation_build_dir}" merge-bin \

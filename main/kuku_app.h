@@ -16,7 +16,7 @@
 
 // 录音参数:16 kHz / 16 bit / 单声道 PCM WAV,32000 bytes/s。
 #define KUKU_SAMPLE_RATE_HZ 16000
-#define KUKU_REC_CHUNK_BYTES 4096
+#define KUKU_REC_CHUNK_BYTES 1024
 #define KUKU_WAV_HEADER_BYTES 44
 #define KUKU_MAX_FILES 200
 #define KUKU_MAX_NAME 32
@@ -118,6 +118,14 @@ void kuku_baidu_on_recording_saved(void);           // WAV 关闭后请求补传
 int  kuku_baidu_request_recording(void);
 void kuku_baidu_get_auth(char *url, size_t ucap, char *code, size_t ccap);
 void kuku_baidu_get_progress(char *name, size_t cap, int *done, int *total);
+// Retained until reboot, including failures recovered after USB disconnect.
+typedef struct {
+    uint32_t attempts, completed, failures, last_ms, max_ms, phase_ms;
+    int last_rc, failure_rc;
+    uint8_t phase, failure_phase;
+    uint32_t failure_ms;
+} kuku_upload_diag_t;
+void kuku_baidu_get_upload_diag(kuku_upload_diag_t *out);
 // 列出应用目录中的云端文件。状态:0 未加载,1 加载中,2 就绪,-1 出错。
 int  kuku_baidu_list_request(int page);
 int  kuku_baidu_list_enter(const kuku_cloud_file_t *folder);
