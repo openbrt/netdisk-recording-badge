@@ -45,3 +45,5 @@ Store reusable music and sound-effect sources in `music/`.
 - Do not commit media without redistribution permission.
 
 `images/netdisk-recording-cover.png`: 1086 × 1448 PNG, an AI-generated illustrative cover supplied and authorized for this project publication by the owner on 2026-10-04. It is not a device screenshot. The Pages build copies the original file into the website; firmware does not embed it.
+
+`images/netdisk-recording-badge-photo.png`: 1440 × 1920 PNG, the creator-supplied device photo used for community publication on 2026-10-05. The existing 3:4 gallery copy preserves the photograph with side margins. It is a historical appearance reference, not evidence of four-hour endurance or complete guide readability. It is used for project review/publication and is not embedded in firmware; no separate image license was supplied.
