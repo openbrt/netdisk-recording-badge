@@ -11,6 +11,7 @@
 #include "kuku_app.h"
 #include "kuku_rec_filename.h"
 #include "kuku_wav.h"
+#include "kuku_rec_progress.h"
 
 #include "bsp_audio.h"
 #include "esp_log.h"
@@ -35,7 +36,9 @@ static const char *TAG = "kuku_rec";
 #define REC_MOUNT_POINT "/rec"
 #define REC_TASK_STACK 4096
 #define CAPTURE_TASK_STACK 3072
-#define REC_BUFFER_BYTES (2 * KUKU_REC_CHUNK_BYTES)
+// Keep 256 ms of queued PCM while using smaller capture/write/play scratch
+// buffers. The queue's time budget must not shrink with the I/O chunk size.
+#define REC_BUFFER_BYTES 8192
 #define PLAY_TASK_STACK 4096
 #define NVS_NS "kuku"
 
@@ -358,6 +361,7 @@ static void capture_task(void *arg) {
         size_t sent = xStreamBufferSend(s_pcm_stream, pcm, sizeof(pcm),
                                         pdMS_TO_TICKS(50));
         s_capture_bytes += sent;
+        kuku_rec_progress_capture((uint32_t)sent);
         g_kuku.rec_ms = (uint32_t)((esp_timer_get_time() - start_us) / 1000);
         if (sent != sizeof(pcm)) {
             s_capture_failed = true;
@@ -447,11 +451,12 @@ static void rec_task(void *arg) {
             written += n;
             total += n;
             g_kuku.rec_bytes = (uint32_t)total;
+            kuku_rec_progress_write(total, segments);
             if (n != bytes) { io_ok = false; break; }
             if (written == segment_bytes) {
                 io_ok = rec_segment_finish(&f, path, final_path, written, io_ok);
                 written = 0;
-                if (io_ok) ++segments;
+                if (io_ok) { ++segments; kuku_rec_progress_write(total, segments); }
             }
         }
         if (!io_ok) {
@@ -472,6 +477,7 @@ static void rec_task(void *arg) {
         bool published = rec_segment_finish(&f, path, final_path, written, io_ok);
         io_ok = published && io_ok;
         if (published) ++segments;
+        kuku_rec_progress_write(total, segments);
     }
     vStreamBufferDelete(s_pcm_stream);
     s_pcm_stream = NULL;
@@ -484,6 +490,10 @@ static void rec_task(void *arg) {
     else if (stop_by_space) kuku_ui_set_status("暂存空间不足，已保存");
     else if (!g_kuku.wifi_up) kuku_ui_set_status("已保存，联网后补传");
     s_rec_result = segments > 0 && !s_capture_failed && io_ok ? 0 : -1;
+    kuku_rec_progress_end(s_capture_failed ? KUKU_REC_CAPTURE :
+                          !io_ok ? KUKU_REC_STORAGE :
+                          stop_by_space ? KUKU_REC_SPACE :
+                          !g_kuku.wifi_up ? KUKU_REC_NETWORK : KUKU_REC_MANUAL);
     s_rec_task = NULL;
     g_kuku.recording = false;
     vTaskDelete(NULL);
@@ -499,6 +509,7 @@ int kuku_rec_start(void) {
     s_pcm_stream = xStreamBufferCreate(REC_BUFFER_BYTES, KUKU_REC_CHUNK_BYTES);
     if (!s_pcm_stream) return -1;
     s_rec_result = -1;
+    kuku_rec_progress_begin();
     s_rec_stop_req = false;
     g_kuku.rec_bytes = 0;
     g_kuku.rec_ms = 0;

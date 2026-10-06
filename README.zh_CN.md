@@ -4,6 +4,8 @@
 
 随身记录声音，每分钟自动保存一段并后台上传百度网盘。录音按日期整理，方便在百度网盘库库 AI 中转写、提取摘要；工牌还能浏览网盘文件、回放本地录音、查看 JPG 并保存工牌照片。
 
+**满电、网络连接正常、边录边上传时，预计可连续录音约4小时。** 此结论对应 2026-10-06 上传修正版，详见[测试条件与依据](docs/recording-endurance.zh_CN.md)；下方原 0.4.4 下载镜像未经本次电池测试。
+
 **[在线烧写与 USB 配网](https://openbrt.github.io/netdisk-recording-badge/)** · [下载 0.4.4 固件](https://github.com/openbrt/netdisk-recording-badge/releases/tag/v0.4.4-netdisk-recording-badge) · [编译说明](docs/build.zh_CN.md)
 
 这是从维护中的录音工牌应用抽取的独立项目，运行于 FoloToy AI Passport。应用源码、驱动、构建配置和测试已独立保存，不依赖访问原私有仓库。
@@ -24,10 +26,14 @@
 
 ## 验证范围
 
-0.4.4 固件已完成构建、主机测试和已存网络短列表实机回归。此前 0.4.3 已验收约十分钟连续录音、自动分段、上传与下载 WAV 内容核对；多小时录音、实际断网断电及跨分段听感尚未验收。在线页面另有协议与串口模拟测试；浏览器首次烧写和 USB 配网的实机操作仍需验收。
+2026-10-06 上传修正版已通过构建与主机检查。电池测试从71%电量开始，验证连续采集与写入至少2小时48分13秒，网盘保存168个完整一分钟录音。测试者已确认没电关机。满电约4小时属于电量曲线估算；精确关机时刻、最后未闭合段恢复、全程内容核验及跨分段听感仍待验收，详见[续航结果](docs/recording-endurance.zh_CN.md)。
+
+原已发布的 0.4.4 镜像已通过构建、主机测试和已存网络短列表实机回归。此前 0.4.3 已验收约十分钟连续录音、分段、上传与下载 WAV 核对。浏览器首次烧写、USB 配网及实际断网行为仍需实机验收。
 
 ## 开发与来源
 
 [中英文编译说明](docs/build.zh_CN.md)包含环境安装、凭据配置、完整校验与产物位置。[文档索引](docs/README.zh_CN.md)保留硬件和工程参考。`main/CMakeLists.txt` 只构建录音应用；参考 demo 源文件用于主机回归测试。
 
 基于 [FoloToy AI Passport](https://github.com/FoloToy/ai-passport)，保留其 MIT 许可与版权声明。页面封面为 AI 生成示意图，非实机截图。浏览器烧写使用 [ESP Web Tools](https://esphome.github.io/esp-web-tools/)。
+
+新会话开发时，先读取 [AGENTS.md](AGENTS.md) 与[会话接续说明](docs/session-handoff.zh_CN.md)，了解应用入口、发布产物、验证范围和待验收事项。

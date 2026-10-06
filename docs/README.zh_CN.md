@@ -1,5 +1,9 @@
 [English](/docs/README.md) · **简体中文**
 
+## 网盘录音工牌
+
+独立录音应用见[产品说明](../README.zh_CN.md)、[录音续航](recording-endurance.zh_CN.md)、[操作指南](kuku-badge-user-guide.zh_CN.md)和[会话接续](session-handoff.zh_CN.md)。下方硬件及基线参考仍可使用。
+
 <h1 align="center">FoloToy AI PASSPORT</h1>
 
 <p align="center">

@@ -15,6 +15,7 @@ This directory contains AI Passport engineering rules and reusable workflows, gr
 
 - [environment-setup.md](engineering/environment-setup.md): clean-machine bootstrap for AI agents, including international and mainland China download routes.
 - [build-and-test.md](engineering/build-and-test.md): ESP-IDF build and validation.
+- [recording-endurance-test-plan.md](engineering/recording-endurance-test-plan.md): battery recording trials, continuous upload acceptance, and side-indicator investigation.
 - [firmware-layout.md](engineering/firmware-layout.md): default and user-defined partition layouts and merged-artifact validation.
 - [coding-conventions.md](engineering/coding-conventions.md): source-code and resource conventions, including Chinese font integration, blank/boxed text troubleshooting, and display acceptance.
 - [lvgl-chinese-fonts.md](engineering/lvgl-chinese-fonts.md): step-by-step CJK configuration, font generation/linking, fallback examples, glyph checks, and troubleshooting.
@@ -31,3 +32,4 @@ This directory contains AI Passport engineering rules and reusable workflows, gr
 - [publish-to-community.md](release/publish-to-community.md): publishing firmware to the AI Passport community market.
 - [project-completion.md](release/project-completion.md): project completion flow — a menu of optional closing actions.
 - [file-issues.md](release/file-issues.md): filing a suggestion as an upstream GitHub issue.
+- [Private endurance collector](../../tools/endurance/README.md): USB arming, Wi-Fi telemetry, and conditional short-window estimates.

@@ -4,6 +4,8 @@
 
 Capture audio on a wearable badge, save a segment every minute, and upload completed segments to Baidu Netdisk in the background. Recordings are organized by date for transcription and summaries in Baidu Netdisk KuKu AI. Browse cloud files, play local recordings, preview JPG images, and save a badge photo.
 
+**With a full battery, a healthy network connection and uploads running alongside recording, estimated continuous recording time is about four hours.** This applies to the 2026-10-06 upload-fix revision; see the [test conditions and evidence](docs/recording-endurance.md). The original 0.4.4 download below was not used for this battery test.
+
 **[Online installation and USB Wi-Fi setup](https://openbrt.github.io/netdisk-recording-badge/)** · [Download firmware 0.4.4](https://github.com/openbrt/netdisk-recording-badge/releases/tag/v0.4.4-netdisk-recording-badge) · [Build instructions](docs/build.md)
 
 This independent project extracts the maintained recording application for FoloToy AI Passport. It includes application sources, drivers, build configuration, and tests, without requiring access to the original private repository.
@@ -24,10 +26,14 @@ Public source excludes the owner's actual Baidu application Secret. Distributed 
 
 ## Validation scope
 
-Firmware 0.4.4 passed build, host tests, and physical saved-network short-list regression. Earlier 0.4.3 testing covered approximately ten minutes of continuous capture, segmentation, upload, and downloaded WAV content verification. Multi-hour recording, actual network/power loss, and listening across segment boundaries remain unverified. The website has separate protocol and simulated serial tests; physical first-install and browser USB provisioning still need acceptance.
+The 2026-10-06 upload-fix revision passed build and host checks. Its battery run verified at least 2 hours 48 minutes 13 seconds of continuous capture and writing from 71% charge, with 168 complete one-minute cloud recordings. Battery shutdown was confirmed by the tester. About four hours from a full charge is a curve-based estimate; exact shutdown time, final partial-segment recovery, whole-session integrity and listening across segment boundaries remain unverified. See the [endurance result](docs/recording-endurance.md).
+
+The original published 0.4.4 image passed builds, host tests and saved-network short-list device regressions. Earlier 0.4.3 acceptance covered about ten minutes of continuous recording, segmentation, uploads and downloaded WAV checks. Physical browser first-install, USB Wi-Fi setup and actual network-loss behavior still require acceptance.
 
 ## Development and attribution
 
 The [bilingual build guide](docs/build.md) covers setup, credentials, complete validation, and outputs. The [documentation index](docs/README.md) retains hardware and engineering references. `main/CMakeLists.txt` builds only the recording application; reference demo sources support host regression tests.
 
 Based on [FoloToy AI Passport](https://github.com/FoloToy/ai-passport), preserving its MIT license and copyright. The cover is an AI-generated illustration, not a device screenshot. Browser installation uses [ESP Web Tools](https://esphome.github.io/esp-web-tools/).
+
+For a new development session, read [AGENTS.md](AGENTS.md) and the [session handoff](docs/session-handoff.md) first. They identify the application sources, release artifacts, current validation limits, and remaining acceptance work.

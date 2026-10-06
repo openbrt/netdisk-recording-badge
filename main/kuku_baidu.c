@@ -6,7 +6,11 @@
 //       成功后 /rec/RECxxxx.WAV 改名 .UPD 标记已同步。
 // 上传已关闭的 WAV；录音采集与旧文件上传可并行，网络任务不占音频资源。
 #include "kuku_app.h"
+#ifdef KUKU_BAIDU_KEYS_HEADER
+#include KUKU_BAIDU_KEYS_HEADER
+#else
 #include "kuku_baidu_keys.h"
+#endif
 
 #include "esp_log.h"
 #include "esp_http_client.h"
@@ -25,6 +29,8 @@
 #include <time.h>
 #include <inttypes.h>
 #include <strings.h>
+#include <sys/socket.h>
+#include <sys/time.h>
 
 #define TAG "kuku_bd"
 
@@ -35,11 +41,11 @@
 #define KUKU_BD_UPLOAD_IOBUF 1024
 #define KUKU_BD_AUTH_STACK 8192
 #define KUKU_BD_UPLOAD_ATTEMPTS 3
-// upload_file() keeps the encoded path and the three-step HTTP scratch buffers
-// alive in one frame (~7.3 KiB in the ESP32-C3 release build).  Newlib's
-// snprintf() then needs additional call stack; 8 KiB overflows before the first
-// precreate request.  Keep measured headroom for newlib and the TLS client.
-#define KUKU_BD_UPLOAD_STACK 12288
+#define KUKU_BD_WRITE_TIMEOUT_MS 3000
+#define KUKU_BD_BODY_BUDGET_MS 40000
+// HTTP phases share scratch storage. Device stack watermarks are checked
+// during concurrent PCM/TLS transfers; keep extra room for newlib and TLS.
+#define KUKU_BD_UPLOAD_STACK 9216
 #define KUKU_BD_PROBE_STACK 8192
 #define KUKU_BD_PROBE_TIMEOUT_MS 8000
 #define KUKU_BD_MIN_RECORD_KB 256 // Allow a shorter segment while older files upload.
@@ -80,6 +86,47 @@ static char s_up_name[KUKU_MAX_NAME];
 static volatile int s_up_done, s_up_total;
 
 static void set_state(uint8_t st) { g_kuku.bd_state = st; }
+
+// Retained upload diagnostics: 0 idle, 1 directory, 2 hash, 3 precreate,
+// 4 multipart, 5 create, 6 local mark. No URL, token or response is retained.
+static kuku_upload_diag_t s_upload_diag;
+static uint32_t s_upload_started_ms, s_upload_phase_ms;
+static uint32_t upload_now_ms(void) { return (uint32_t)(esp_timer_get_time() / 1000); }
+static void upload_diag_phase(uint8_t phase) {
+    portENTER_CRITICAL(&s_cloud_mux);
+    s_upload_diag.phase = phase;
+    s_upload_phase_ms = upload_now_ms();
+    portEXIT_CRITICAL(&s_cloud_mux);
+}
+static void upload_diag_begin(void) {
+    portENTER_CRITICAL(&s_cloud_mux);
+    s_upload_diag.attempts++;
+    s_upload_started_ms = upload_now_ms();
+    portEXIT_CRITICAL(&s_cloud_mux);
+    upload_diag_phase(1);
+}
+static void upload_diag_end(int rc) {
+    portENTER_CRITICAL(&s_cloud_mux);
+    uint32_t elapsed = upload_now_ms() - s_upload_started_ms;
+    s_upload_diag.last_ms = elapsed;
+    if (elapsed > s_upload_diag.max_ms) s_upload_diag.max_ms = elapsed;
+    s_upload_diag.last_rc = rc;
+    if (rc == 0) s_upload_diag.completed++;
+    else {
+        s_upload_diag.failures++;
+        s_upload_diag.failure_rc = rc;
+        s_upload_diag.failure_phase = s_upload_diag.phase;
+        s_upload_diag.failure_ms = elapsed;
+    }
+    s_upload_diag.phase = 0;
+    portEXIT_CRITICAL(&s_cloud_mux);
+}
+void kuku_baidu_get_upload_diag(kuku_upload_diag_t *out) {
+    portENTER_CRITICAL(&s_cloud_mux);
+    *out = s_upload_diag;
+    out->phase_ms = out->phase ? upload_now_ms() - s_upload_phase_ms : 0;
+    portEXIT_CRITICAL(&s_cloud_mux);
+}
 
 // ---- 小工具 -----------------------------------------------------------------
 // Bind cached authorization to this exact client configuration. A changed
@@ -694,7 +741,7 @@ static int http_upload_part(const char *url, FILE *f, long size,
         .url = url,
         .crt_bundle_attach = esp_crt_bundle_attach,
         .method = HTTP_METHOD_POST,
-        .timeout_ms = 60000,
+        .timeout_ms = 15000,
         .buffer_size = 1024,
         .buffer_size_tx = 1024,
     };
@@ -711,9 +758,21 @@ static int http_upload_part(const char *url, FILE *f, long size,
     long sent = 0;
     esp_err_t open_rc = buf ? esp_http_client_open(c, total) : ESP_ERR_NO_MEM;
     if (open_rc == ESP_OK) {
-        bool ok = true;
-        int w = esp_http_client_write(c, head, head_len);
-        ok = (w == head_len);
+        // A 60-second blocked socket write consumes most of the recording
+        // reserve. Close a stalled transaction and retry on a new connection.
+        esp_http_client_set_timeout_ms(c, KUKU_BD_WRITE_TIMEOUT_MS);
+        // The HTTP timeout changes polling; the TLS socket still carries the
+        // timeout installed during connection setup. Bound its send too.
+        int sockfd = esp_http_client_get_socket(c);
+        struct timeval send_timeout = {
+            .tv_sec = KUKU_BD_WRITE_TIMEOUT_MS / 1000,
+            .tv_usec = (KUKU_BD_WRITE_TIMEOUT_MS % 1000) * 1000,
+        };
+        bool ok = sockfd >= 0 && setsockopt(sockfd, SOL_SOCKET, SO_SNDTIMEO,
+                                           &send_timeout, sizeof(send_timeout)) == 0;
+        int64_t body_started = esp_timer_get_time();
+        int w = ok ? esp_http_client_write(c, head, head_len) : -1;
+        ok = ok && (w == head_len);
         if (ok) {
             long left = size;
             while (left > 0 && ok) {
@@ -722,6 +781,11 @@ static int http_upload_part(const char *url, FILE *f, long size,
                 if (r == 0) { ok = false; break; }
                 int off = 0;
                 while (off < (int)r && ok) {
+                    if ((esp_timer_get_time() - body_started) / 1000 >= KUKU_BD_BODY_BUDGET_MS) {
+                        ESP_LOGW(TAG, "part body deadline sent=%ld/%ld", sent, size);
+                        ok = false;
+                        break;
+                    }
                     w = esp_http_client_write(c, (const char *)buf + off, (int)r - off);
                     if (w <= 0) ok = false; else { off += w; sent += w; }
                 }
@@ -733,6 +797,7 @@ static int http_upload_part(const char *url, FILE *f, long size,
         }
         if (ok) ok = (esp_http_client_write(c, tail, tail_len) == tail_len);
         if (ok) {
+            esp_http_client_set_timeout_ms(c, 15000);
             int64_t header_rc = esp_http_client_fetch_headers(c);
             if (header_rc < 0) {
                 ESP_LOGW(TAG, "part response headers failed rc=%lld sent=%ld/%ld",
@@ -1202,7 +1267,7 @@ static int prepare_recording_directory(const char *name) {
 
 // 三步上传单个文件。返回 0 成功。
 static int upload_file(const char *name) {
-    char path[280];
+    char path[48];
     snprintf(path, sizeof(path), "/rec/%s", name);
     FILE *f = fopen(path, "rb");
     if (!f) return -1;
@@ -1218,25 +1283,34 @@ static int upload_file(const char *name) {
     url_encode(remote, remote_enc, sizeof(remote_enc));
 
     char bljson[256];
+    upload_diag_phase(2);
     if (md5_block_list(path, size, bljson, sizeof(bljson)) != 0) {
         fclose(f); return -1;
     }
     char bl_enc[3 * sizeof(bljson)];
     url_encode(bljson, bl_enc, sizeof(bl_enc));
 
+    // Only one HTTP phase is live at a time. Share its scratch buffers so
+    // the upload task leaves memory for the certificate handshake.
+    union {
+        struct { char body[1024], url[640], resp[1024]; } request;
+        struct { char url[1120], resp[512]; } part;
+    } scratch;
+
     // 1. precreate
+    upload_diag_phase(3);
     char uploadid[80] = {0};
     int rtype = 1;
     {
-        char body[1024], url[640], resp[1024];
-        int n = snprintf(body, sizeof(body),
+        char *body=scratch.request.body, *url=scratch.request.url, *resp=scratch.request.resp;
+        int n = snprintf(body, sizeof(scratch.request.body),
             "path=%s&size=%ld&isdir=0&autoinit=1&block_list=%s",
             remote_enc, size, bl_enc);
-        snprintf(url, sizeof(url),
+        snprintf(url, sizeof(scratch.request.url),
             "https://pan.baidu.com/rest/2.0/xpan/file?method=precreate&access_token=%s",
             s_access);
         if (http_req(url, HTTP_METHOD_POST, body, n,
-                     "application/x-www-form-urlencoded", resp, sizeof(resp), 15000) != 0) {
+                     "application/x-www-form-urlencoded", resp, sizeof(scratch.request.resp), 15000) != 0) {
             fclose(f); return -1;
         }
         cJSON *root = cJSON_Parse(resp);
@@ -1263,12 +1337,14 @@ static int upload_file(const char *name) {
             long off = (long)i * KUKU_BD_BLOCK;
             long len = size - off > KUKU_BD_BLOCK ? KUKU_BD_BLOCK : size - off;
             fseek(f, off, SEEK_SET);
-            char url[1120], resp[512] = {0};
-            snprintf(url, sizeof(url),
+            char *url=scratch.part.url, *resp=scratch.part.resp;
+            resp[0]=0;
+            snprintf(url, sizeof(scratch.part.url),
                 "https://d.pcs.baidu.com/rest/2.0/pcs/superfile2?method=upload"
                 "&access_token=%s&type=tmpfile&path=%s&uploadid=%s&partseq=%d",
                 s_access, remote_enc, uploadid, i);
-            int prc = http_upload_part(url, f, len, resp, sizeof(resp));
+            upload_diag_phase(4);
+            int prc = http_upload_part(url, f, len, resp, sizeof(scratch.part.resp));
             char local_md5[33] = {0}, remote_md5[33] = {0};
             int pe = prc == 0 ? part_response_status(resp, remote_md5) : -3;
             if (pe == 0 &&
@@ -1289,15 +1365,16 @@ static int upload_file(const char *name) {
     fclose(f);
 
     // 3. create 合并
-    char body[1024], url[640], resp[512];
-    int n = snprintf(body, sizeof(body),
+    upload_diag_phase(5);
+    char *body=scratch.request.body, *url=scratch.request.url, *resp=scratch.request.resp;
+    int n = snprintf(body, sizeof(scratch.request.body),
         "path=%s&size=%ld&isdir=0&uploadid=%s&block_list=%s",
         remote_enc, size, uploadid, bl_enc);
-    snprintf(url, sizeof(url),
+    snprintf(url, sizeof(scratch.request.url),
         "https://pan.baidu.com/rest/2.0/xpan/file?method=create&access_token=%s",
         s_access);
     if (http_req(url, HTTP_METHOD_POST, body, n,
-                 "application/x-www-form-urlencoded", resp, sizeof(resp), 15000) != 0)
+                 "application/x-www-form-urlencoded", resp, sizeof(scratch.request.resp), 15000) != 0)
         return -4;
     int ce = -102;
     cJSON *root = cJSON_Parse(resp);
@@ -1312,6 +1389,7 @@ static int upload_file(const char *name) {
     }
 
     // Publish completion under the same catalog lock as recording publication.
+    upload_diag_phase(6);
     if (kuku_rec_mark_uploaded(name) != 0) {
         ESP_LOGW(TAG, "已上传文件标记失败，保留待传: %s", name);
         return -6;
@@ -1323,85 +1401,90 @@ static int upload_file(const char *name) {
 // 上传一轮:所有未同步(.WAV)文件逐个上传。
 static void upload_task(void *arg) {
     (void)arg;
-    bool queued_during_upload;
-    int pending_count;
-    char (*batch)[KUKU_MAX_NAME] = NULL;
     set_state(BD_UPLOADING);
-    // The multipart POST is sensitive to modem-sleep stalls on this board.
-    // Keep the radio awake only while a pending batch is being transferred.
+    // Keep ownership of TLS and this task stack across queued batches.
     esp_wifi_set_ps(WIFI_PS_NONE);
     s_up_total = s_up_done = 0;
 
-    // 先确认 token 还活着(墙钟可用且已过期 → 刷新)
     int64_t now_epoch = time(NULL);
     if (s_at_exp_boot > 0 && now_epoch > 1600000000 && now_epoch > s_at_exp_boot) {
-        ESP_LOGI(TAG, "access_token 过期,刷新");
         if (token_refresh() != 0) {
-            ESP_LOGW(TAG, "刷新失败,转人工重授权");
             set_state(BD_NO_AUTH);
             goto done;
         }
     }
-
-    int capacity = kuku_rec_count();
-    batch = capacity > 0 ? malloc((size_t)capacity * sizeof(*batch)) : NULL;
-    if (capacity > 0 && !batch) {
-        set_state(BD_READY);
-        goto done;
-    }
-    int count = kuku_rec_snapshot(batch, capacity);
-    for (int i = 0; i < count; i++) {
-        if (!g_kuku.wifi_up) break;
-        const char *name = batch[i];
-        size_t l = strlen(name);
-        if (l < 8 || strcmp(name + l - 4, ".WAV") != 0) continue;   // 跳过已传
-        s_up_total++;
-        strlcpy(s_up_name, name, sizeof(s_up_name));
-        int rc = -1;
-        for (int attempt = 1; attempt <= KUKU_BD_UPLOAD_ATTEMPTS; attempt++) {
-            // Keep directory HTTP scratch space off upload_file's larger frame.
-            rc = prepare_recording_directory(name);
-            if (rc == 0) rc = upload_file(name);
-            if (rc == 0 || rc == -111 || !g_kuku.wifi_up) break;
-            if (attempt < KUKU_BD_UPLOAD_ATTEMPTS) {
-                ESP_LOGW(TAG, "UP: %s 传输失败 rc=%d, 第 %d/%d 次重试", name, rc,
-                         attempt + 1, KUKU_BD_UPLOAD_ATTEMPTS);
-                vTaskDelay(pdMS_TO_TICKS(2000));
-            }
-        }
-        if (rc == -111) {           // token 失效:刷新一次重试
-            if (token_refresh() == 0) {
+    for (;;) {
+        s_up_total = s_up_done = 0;
+        int capacity = kuku_rec_count();
+        char (*batch)[KUKU_MAX_NAME] = capacity > 0 ? malloc((size_t)capacity * sizeof(*batch)) : NULL;
+        if (capacity > 0 && !batch) break;
+        int count = kuku_rec_snapshot(batch, capacity);
+        for (int i = 0; i < count; i++) {
+            if (!g_kuku.wifi_up) break;
+            const char *name = batch[i];
+            size_t l = strlen(name);
+            if (l < 8 || strcmp(name + l - 4, ".WAV") != 0) continue;
+            s_up_total++;
+            strlcpy(s_up_name, name, sizeof(s_up_name));
+            int rc = -1;
+            for (int attempt = 1; attempt <= KUKU_BD_UPLOAD_ATTEMPTS; attempt++) {
+                upload_diag_begin();
                 rc = prepare_recording_directory(name);
                 if (rc == 0) rc = upload_file(name);
+                upload_diag_end(rc);
+                if (rc == 0 || rc == -111 || !g_kuku.wifi_up) break;
+                if (attempt < KUKU_BD_UPLOAD_ATTEMPTS) {
+                    ESP_LOGW(TAG, "UP: %s 传输失败 rc=%d, 第 %d/%d 次重试", name, rc,
+                             attempt + 1, KUKU_BD_UPLOAD_ATTEMPTS);
+                    vTaskDelay(pdMS_TO_TICKS(2000));
+                }
             }
-            else { set_state(BD_NO_AUTH); goto done; }
+            if (rc == -111) {
+                if (token_refresh() == 0) {
+                    upload_diag_begin();
+                    rc = prepare_recording_directory(name);
+                    if (rc == 0) rc = upload_file(name);
+                    upload_diag_end(rc);
+                } else {
+                    set_state(BD_NO_AUTH);
+                    free(batch);
+                    goto done;
+                }
+            }
+            if (rc == 0) {
+                s_up_done++;
+                // Reclaim confirmed files before a later transfer can stall.
+                // Only .UPD is removed; unsynced WAVs stay intact.
+                kuku_rec_clean_synced();
+            }
+            vTaskDelay(pdMS_TO_TICKS(300));
         }
-        if (rc == 0) s_up_done++;
-        vTaskDelay(pdMS_TO_TICKS(300));
+        free(batch);
+        portENTER_CRITICAL(&s_cloud_mux);
+        s_cloud_status = 0;
+        s_cloud_count = 0;
+        s_cloud_has_more = false;
+        bool again = s_upload_requested && g_kuku.wifi_up;
+        s_upload_requested = false;
+        portEXIT_CRITICAL(&s_cloud_mux);
+        ESP_LOGI(TAG, "UP: 本轮 %d/%d 完成", s_up_done, s_up_total);
+        if (!again) break;
+        // Newly closed recordings use the same worker, without a second
+        // 9 KiB task allocation or a telemetry TLS window between batches.
     }
-    set_state(s_access[0] ? BD_READY : BD_NO_AUTH);
-    portENTER_CRITICAL(&s_cloud_mux);
-    s_cloud_status = 0;
-    s_cloud_count = 0;
-    s_cloud_has_more = false;
-    portEXIT_CRITICAL(&s_cloud_mux);
-    ESP_LOGI(TAG, "UP: 本轮 %d/%d 完成", s_up_done, s_up_total);
 done:
     esp_wifi_set_ps(WIFI_PS_MIN_MODEM);
-    // The immutable batch survives catalog changes while new recordings close.
-    free(batch);
-    if (s_up_done > 0) kuku_rec_clean_synced();
     kuku_rec_refresh();
-    pending_count = kuku_rec_count();
+    int pending_count = kuku_rec_count();
     s_up_name[0] = 0;
     portENTER_CRITICAL(&s_cloud_mux);
-    queued_during_upload = s_upload_requested;
-    s_upload_requested = pending_count > 0 || queued_during_upload;
+    s_upload_requested = pending_count > 0 || s_upload_requested;
+    if (g_kuku.bd_state == BD_UPLOADING)
+        set_state(s_access[0] ? BD_READY : BD_NO_AUTH);
     s_upload_task_running = false;
     portEXIT_CRITICAL(&s_cloud_mux);
     if (s_up_total > 0)
         kuku_ui_set_status(pending_count == 0 ? "已同步网盘" : "同步失败，待重试");
-    if (queued_during_upload) kuku_baidu_upload_pass();
     vTaskDelete(NULL);
 }
 

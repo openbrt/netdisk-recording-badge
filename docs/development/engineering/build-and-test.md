@@ -169,3 +169,7 @@ Hardware-affecting changes must also run the applicable on-device checklist in t
 Never upload the app-only `build/FoloToy-AI-Passport.bin` to the community. Only
 the validated `build/FoloToy-AI-Passport-full.bin` contains the complete checked
 firmware layout.
+
+## Private functional validation builds
+
+An authorized local functional build may set `KUKU_BAIDU_KEYS_HEADER` to an absolute path of a private header containing the application configuration before running `./tools/validate.sh`. The gate forwards it to CMake and preserves the exact matching image/ELF bundle. With this variable unset, the default public placeholder header remains in use. Do not overwrite the public template, publish the private path or header, or flash a placeholder build for real cloud acceptance. This option does not change partitions or authorize publication.

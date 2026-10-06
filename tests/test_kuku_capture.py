@@ -12,12 +12,13 @@ class CaptureTest(unittest.TestCase):
         source = (ROOT / 'main/kuku_rec.c').read_text()
         worker = source[source.index('static void capture_task('):source.index('// Close each completed segment')]
         harness = r'''
+#include "kuku_rec_progress.h"
 #include <assert.h>
 #include <stdbool.h>
 #include <stdint.h>
 #include <stdio.h>
 #include <string.h>
-#define KUKU_REC_CHUNK_BYTES 4096
+#define KUKU_REC_CHUNK_BYTES 1024
 #define KUKU_REC_MAX_SECONDS 120
 #define ESP_OK 0
 #define TAG "test"
@@ -32,8 +33,8 @@ static int64_t now_us;
 static int64_t esp_timer_get_time(void) { return now_us; }
 static void vTaskDelete(void *task) { assert(!task); ++deletes; }
 static int bsp_audio_read(void *pcm, size_t bytes) {
- ++reads; assert(bytes == 4096); memset(pcm, reads, bytes);
- now_us += mode == 4 ? 120000000 : 128000;
+ ++reads; assert(bytes == KUKU_REC_CHUNK_BYTES); memset(pcm, reads, bytes);
+ now_us += mode == 4 ? 120000000 : KUKU_REC_CHUNK_BYTES * 1000000LL / 32000;
  if (mode == 1) return -1;
  if (mode == 3) g_kuku.wifi_up = false;
  if (reads == 3) s_rec_stop_req = true;
@@ -53,13 +54,13 @@ static void reset(int selected) {
         checks = r'''
 int main(void) {
  reset(0); capture_task(NULL);
- assert(reads == 3 && s_capture_bytes == 12288 && !s_capture_failed && s_capture_done && deletes == 1);
+ assert(reads == 3 && s_capture_bytes == 3 * KUKU_REC_CHUNK_BYTES && !s_capture_failed && s_capture_done && deletes == 1);
  reset(1); capture_task(NULL);
  assert(reads == 1 && s_capture_bytes == 0 && s_capture_failed && s_capture_done);
  reset(2); capture_task(NULL);
- assert(reads == 1 && s_capture_bytes == 2048 && s_capture_failed && s_capture_done);
+ assert(reads == 1 && s_capture_bytes == KUKU_REC_CHUNK_BYTES / 2 && s_capture_failed && s_capture_done);
  reset(3); capture_task(NULL);
- assert(reads == 1 && s_capture_bytes == 4096 && !s_capture_failed && s_capture_done); // Network loss saves and stops.
+ assert(reads == 1 && s_capture_bytes == KUKU_REC_CHUNK_BYTES && !s_capture_failed && s_capture_done); // Network loss saves and stops.
  reset(4); capture_task(NULL);
  assert(reads == 3 && g_kuku.rec_ms == 360000 && s_capture_done); // No old two-minute session cutoff.
  return 0;
@@ -69,7 +70,7 @@ int main(void) {
             path = Path(directory)
             (path / 'test.c').write_text(harness + worker + checks)
             subprocess.run(['cc', '-std=c11', '-Wall', '-Wextra', '-Werror',
-                            str(path / 'test.c'), '-o', str(path / 'test')], check=True)
+                            '-I'+str(ROOT/'main'), str(path / 'test.c'), str(ROOT/'main/kuku_rec_progress.c'), '-o', str(path / 'test')], check=True)
             subprocess.run([str(path / 'test')], check=True)
 
 

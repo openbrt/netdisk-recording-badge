@@ -14,11 +14,17 @@
 //   WIFI SCAN / LIST / DEL <n> / STA / INFO
 // 命令行以 \n 结尾,命令词大小写不敏感(参数保持原样)。产品按键逻辑不受影响。
 #include "kuku_app.h"
+#include "kuku_endurance.h"
+#include "kuku_console_line.h"
+#include "kuku_rec_progress.h"
 
 #include "bsp_display.h"
 #include "esp_log.h"
 #include "esp_timer.h"
 #include "esp_wifi.h"
+#include "esp_app_desc.h"
+#include "esp_heap_caps.h"
+#include <inttypes.h>
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
 #include <stdio.h>
@@ -256,21 +262,72 @@ static void cmd_baidu(const char *arg) {
     }
 }
 
+static void cmd_stats(void) {
+    kuku_rec_progress_t progress;
+    kuku_rec_progress_get(&progress);
+    printf("STATS: captured=%"PRIu64" written=%"PRIu64" session=%"PRIu32
+           " segments=%"PRIu32" reason=%u heap=%u min=%u largest=%u\r\n",
+           progress.captured_bytes, progress.written_bytes, progress.session,
+           progress.segments, progress.reason, (unsigned)esp_get_free_heap_size(),
+           (unsigned)esp_get_minimum_free_heap_size(),
+           (unsigned)heap_caps_get_largest_free_block(MALLOC_CAP_8BIT));
+    const esp_app_desc_t *app=esp_app_get_description();
+    printf("IDENTITY: elf=");
+    for (unsigned i=0;i<32;i++) printf("%02x",app->app_elf_sha256[i]);
+    printf("\r\n");
+    kuku_upload_diag_t upload;
+    kuku_baidu_get_upload_diag(&upload);
+    printf("UPLOAD: attempts=%"PRIu32" completed=%"PRIu32" failures=%"PRIu32
+           " last_rc=%d last_ms=%"PRIu32" max_ms=%"PRIu32
+           " phase=%u phase_ms=%"PRIu32" failure_rc=%d failure_phase=%u failure_ms=%"PRIu32"\r\n",
+           upload.attempts, upload.completed, upload.failures, upload.last_rc,
+           upload.last_ms, upload.max_ms, upload.phase, upload.phase_ms,
+           upload.failure_rc, upload.failure_phase, upload.failure_ms);
+    TaskStatus_t tasks[24];
+    char names[24][configMAX_TASK_NAME_LEN];
+    // Copy names while task deletion is suspended; snapshot name pointers may
+    // otherwise outlive a short-lived upload/capture task's control block.
+    vTaskSuspendAll();
+    UBaseType_t count=uxTaskGetSystemState(tasks,24,NULL);
+    for (UBaseType_t i=0;i<count;i++) strlcpy(names[i],tasks[i].pcTaskName,sizeof(names[i]));
+    xTaskResumeAll();
+    for (UBaseType_t i=0;i<count;i++)
+        printf("STACK: %s free_min=%u\r\n",names[i],
+               (unsigned)tasks[i].usStackHighWaterMark);
+}
+
 static void test_task(void *arg) {
     (void)arg;
-    char line[128], up[128];
+    kuku_console_line_t input={0};
+    char up[KUKU_CONSOLE_LINE_CAP];
+    const char *line=input.text;
     printf("kuku-test: ready (REC<n>/LS/DUMP<name>/FREE/FILENAME/CLEAN SYNCED/"
            "WIFI<SET s|p|SCAN|LIST|DEL n|STA|INFO>/BAIDU<AUTH|UPLOAD|STATUS|LIST>)\r\n");
     for (;;) {
-        if (!fgets(line, sizeof(line), stdin)) {
-            vTaskDelay(pdMS_TO_TICKS(100));
+        int byte=fgetc(stdin);
+        if (byte==EOF) {
+            clearerr(stdin);
+            vTaskDelay(pdMS_TO_TICKS(10));
             continue;
         }
-        line[strcspn(line, "\r\n")] = '\0';
+        kuku_line_result_t result=kuku_console_line_feed(&input,(unsigned char)byte);
+        if (result==KUKU_LINE_REJECTED) printf("CONSOLE: invalid line discarded\r\n");
+        if (result!=KUKU_LINE_READY) continue;
         // 大写副本只用于命令词匹配;WIFI SET 的 SSID/密码取原始 line(大小写敏感)。
         strlcpy(up, line, sizeof(up));
         for (char *p = up; *p; p++) *p = (char)toupper((unsigned char)*p);
-        if (strcmp(up, "STATE") == 0) {
+        if (strncmp(up, "ENDURANCE", 9) == 0) {
+            if (strncmp(up + 9, " ARM ", 5) == 0) {
+                char url[192], token[65], extra[2];
+                int n=sscanf(line+14,"%191s %64s %1s",url,token,extra);
+                printf("ENDURANCE: arm rc=%d\r\n",n==2 ? kuku_endurance_arm(url,token) : -1);
+            } else if (!strcmp(up+9," OFF")) {
+                printf("ENDURANCE: off rc=%d\r\n",kuku_endurance_off());
+            } else if (!strcmp(up+9," STATUS") || !up[9]) kuku_endurance_status();
+            else printf("ENDURANCE: ARM <url> <token> / OFF / STATUS\r\n");
+        } else if (strcmp(up, "STATS") == 0) {
+            cmd_stats();
+        } else if (strcmp(up, "STATE") == 0) {
             printf("STATE: page=%d rec=%d play=%d off=%d wifi=%d bd=%u bytes=%lu ms=%lu\r\n",
                    kuku_test_page(), g_kuku.recording, g_kuku.playing,
                    g_kuku.screen_off, g_kuku.wifi_up, g_kuku.bd_state,
@@ -332,6 +389,6 @@ static void test_task(void *arg) {
 }
 
 void kuku_test_start(void) {
-    if (xTaskCreate(test_task, "kuku_test", 9216, NULL, 3, NULL) != pdPASS)
+    if (xTaskCreate(test_task, "kuku_test", 7168, NULL, 3, NULL) != pdPASS)
         ESP_LOGE(TAG, "test task create failed");
 }

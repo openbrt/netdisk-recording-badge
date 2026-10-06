@@ -144,3 +144,7 @@ cc -std=c11 -Wall -Wextra -Werror -Imain \
 
 社区只能上传验证通过的 `build/FoloToy-AI-Passport-full.bin`，不得上传应用单镜像
 `build/FoloToy-AI-Passport.bin`，后者不包含完整且经校验的固件布局。
+
+## 私有功能验证构建
+
+已授权的本地功能构建可在运行 `./tools/validate.sh` 前，将 `KUKU_BAIDU_KEYS_HEADER` 设为私有应用配置头文件的绝对路径。门禁将该配置传给 CMake，并归档准确匹配的镜像/ELF。未设置此变量时仍使用默认公开占位头文件。不要覆盖公开模板，不公开私有路径或头文件，也不将占位构建烧写用于真实云端验收。此选项不改变分区，也不授权发布。
